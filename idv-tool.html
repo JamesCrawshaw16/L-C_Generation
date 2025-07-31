@@ -1,0 +1,158 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <title>L&C Identity Verification Generator</title>
+  <style>
+    body {
+      font-family: Arial, sans-serif;
+      padding: 2em;
+      max-width: 600px;
+      margin: auto;
+      background-color: #f9f9f9;
+    }
+    img.logo {
+      max-height: 60px;
+      display: block;
+      margin: 0 auto 1em;
+    }
+    h1 {
+      text-align: center;
+      color: #333;
+    }
+    label, input, button {
+      display: block;
+      width: 100%;
+      margin-bottom: 1em;
+    }
+    input {
+      padding: 0.5em;
+      font-size: 1em;
+    }
+    button {
+      padding: 0.7em;
+      font-size: 1em;
+      background-color: #005baa;
+      color: white;
+      border: none;
+      cursor: pointer;
+    }
+    button:hover {
+      background-color: #004080;
+    }
+    .output {
+      margin-top: 2em;
+      padding: 1em;
+      background-color: #fff;
+      border: 1px solid #ccc;
+    }
+  </style>
+</head>
+<body>
+
+  <img src="https://encrypted-tbn0.gstatic.com/images?q=tbn:ANd9GcQ7sQso3H6imNkNFKHejDCNbyJhomr_wU2YmA&s" alt="L&C Logo" class="logo">
+  <h1>L&C Identity Verification</h1>
+  <p>Please enter the email address of the user and click "Generate Link".</p>
+
+  <label for="email">Email address:</label>
+  <input type="email" id="email" required>
+
+  <button id="generate">Generate Verification Link</button>
+
+  <div class="output" id="output"></div>
+
+  <script>
+    document.getElementById("generate").addEventListener("click", async () => {
+      const email = document.getElementById("email").value.trim();
+      const output = document.getElementById("output");
+
+      if (!email) {
+        output.innerHTML = "❌ Please enter a valid email address.";
+        return;
+      }
+
+      output.innerHTML = "⏳ Generating link...";
+
+      const customerCode = generateCustomerCode();
+
+      function generateCustomerCode() {
+        const today = new Date();
+        const y = today.getFullYear().toString().slice(-2);
+        const m = (today.getMonth() + 1).toString();
+        const d = today.getDate().toString();
+        const rand = Math.floor(100 + Math.random() * 900);
+        return `${y}${m}${d}${rand}`;
+      }
+
+      try {
+        // Step 1: Get the token
+        const authResponse = await fetch("https://auth.idmission.com/auth/realms/identity/protocol/openid-connect/token", {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/x-www-form-urlencoded"
+          },
+          body: new URLSearchParams({
+            grant_type: "password",
+            client_id: "65252",
+            client_secret: "ILTlu7n1nTeOlHUlyuJvmWTkT2UTLcnK",
+            username: "ev_integ_65252",
+            password: "IDmi#252$"
+          })
+        });
+
+        const authData = await authResponse.json();
+        const token = authData.access_token;
+
+        // Step 2: Send the IDV-FACE request
+        const requestBody = {
+          customerData: {
+            requestType: "IDV-FACE",
+            email: email,
+            customerCode: "",
+            mobileNumber: "",
+            countryCodeSMS: "",
+            personalData: {
+            },
+            policyAcceptanceData: {
+            }
+          },
+          additionalData: {
+            clientRequestID: "test-client-001",
+            notifyLink: "true",
+            linkExpireTime: "3D",
+            amount: "100.00"
+          }
+        };
+
+        const enrollResponse = await fetch("https://api.idmission.com/v4/customer/generate-identity-link", {
+          method: "POST",
+          headers: {
+            "Authorization": `Bearer ${token}`,
+            "Content-Type": "application/json"
+          },
+          body: JSON.stringify(requestBody)
+        });
+
+        const result = await enrollResponse.json();
+        console.log("API response:", result);
+
+        const idLink = result?.customerData?.kycUrl;
+
+        if (idLink) {
+          output.innerHTML = `
+            ✅ Customer Code: <strong>${customerCode}</strong><br>
+            Verification Link: <a href="${idLink}" target="_blank">${idLink}</a>
+          `;
+        } else {
+          output.innerHTML = "❌ Verification link not returned from the server.";
+        }
+
+      } catch (error) {
+        console.error("Error during API call:", error);
+        output.innerHTML = "❌ Something went wrong. Check the console for details.";
+      }
+    });
+  </script>
+
+</body>
+</html>
